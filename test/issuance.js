@@ -13,8 +13,8 @@ contract('Issuance', ([appManager, user]) => {
 
   let tokenManagerBase, tokenManager, vaultBase, vault, issuanceBase, issuance, commonPoolToken
 
-  const INITIAL_TARGET_RATIO = bigExp(2, 17) // 0.2 (20% of total supply)
-  const INITIAL_MAX_ADJUSTMENT_PER_SECOND = bigExp(1, 10) // maybe 1e12/13 ?
+  const INITIAL_TARGET_RATIO = bigExp(2, 9) // 0.2 (20% of total supply)
+  const INITIAL_MAX_ADJUSTMENT_PER_SECOND = bigExp(1, 15) // maybe 1e12/13 ?
 
   before('deploy base issuance', async () => {
     tokenManagerBase = await TokenManager.new()
@@ -56,7 +56,7 @@ contract('Issuance', ([appManager, user]) => {
       it('executes burn adjustment correctly after 1 year', async () => {
         await tokenManager.mint(appManager, bigExp(100, 18))
         await commonPoolToken.transfer(vault.address, bigExp(30, 18))
-        await issuance.mockIncreaseTime(ONE_DAY * 31)
+        await issuance.mockIncreaseTime(ONE_DAY * 365)
         console.log((await commonPoolToken.balanceOf(vault.address)).toString())
 
         const receipt = await issuance.executeAdjustment()
