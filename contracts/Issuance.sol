@@ -23,6 +23,7 @@ contract Issuance is AragonApp {
     uint256 public previousAdjustmentSecond;
 
     event AdjustmentMade(uint256 adjustmentAmount, bool positive);
+    event SettingsUpdated(uint256 targetRatio, uint256 maxAdjustmentPerSecond);
 
     /**
     * @param _targetRatio Fractional ratio value multiplied by no adjustment ratio, eg target ratio of 0.2 would be 2e17
@@ -34,7 +35,7 @@ contract Issuance is AragonApp {
         uint256 _targetRatio,
         uint256 _maxAdjustmentPerSecond
     )
-        public onlyInit
+        external onlyInit
     {
         commonPoolTokenManager = _commonPoolTokenManager;
         commonPoolVault = _commonPoolVault;
@@ -42,21 +43,32 @@ contract Issuance is AragonApp {
         targetRatio = _targetRatio;
         maxAdjustmentPerSecond = _maxAdjustmentPerSecond;
 
-        previousAdjustmentSecond = now;
+        previousAdjustmentSecond = getTimestamp();
 
         initialized();
     }
+
+    function updateSettings(uint256 _targetRatio, uint256 _maxAdjustmentPerSecond) external {
+        targetRatio = _targetRatio;
+        maxAdjustmentPerSecond = _maxAdjustmentPerSecond;
+        SettingsUpdated(_targetRatio, _maxAdjustmentPerSecond);
+    }
+
+    event DEBUG(uint256 a, uint256 b, uint256 c);
 
     function executeAdjustment() external {
         uint256 commonPoolBalance = commonPoolVault.balance(commonPoolToken);
         uint256 tokenTotalSupply = commonPoolToken.totalSupply();
 
-        uint256 balanceToSupplyRatio = (commonPoolBalance.mul(PRECISION_MULTIPLIER).mul(NO_ADJUSTMENT_RATIO)).div(tokenTotalSupply);
-        uint256 balanceToTargetRatio = (balanceToSupplyRatio.div(targetRatio));
+        uint256 commonPoolBalanceWithPrecision = commonPoolBalance.mul(PRECISION_MULTIPLIER).mul(NO_ADJUSTMENT_RATIO);
+        uint256 balanceToSupplyRatio = commonPoolBalanceWithPrecision.div(tokenTotalSupply);
+        uint256 balanceToTargetRatio = balanceToSupplyRatio.div(targetRatio); // Note targetRatio is fractional targetRatio * NO_ADJUSTMENT_RATIO
 
-        if (balanceToTargetRatio > NO_ADJUSTMENT_RATIO) {
-            uint256 totalToBurn = _totalAdjustment(balanceToTargetRatio - NO_ADJUSTMENT_RATIO, tokenTotalSupply);
+        if (balanceToTargetRatio > PRECISION_MULTIPLIER) {
+            uint256 totalToBurn = _totalAdjustment(balanceToTargetRatio - PRECISION_MULTIPLIER, tokenTotalSupply);
             commonPoolTokenManager.burn(commonPoolVault, totalToBurn);
+
+            emit DEBUG(totalToBurn, totalToBurn, totalToBurn);
 
             emit AdjustmentMade(totalToBurn, false);
 
@@ -67,14 +79,14 @@ contract Issuance is AragonApp {
             emit AdjustmentMade(totalToMint, true);
         }
 
-        previousAdjustmentSecond = now;
+        previousAdjustmentSecond = getTimestamp();
     }
 
     function _totalAdjustment(uint256 _ratioDifference, uint256 _tokenTotalSupply) internal returns (uint256) {
-        uint256 secondsSinceLastAdjustment = now.sub(previousAdjustmentSecond);
+        uint256 secondsSinceLastAdjustment = getTimestamp().sub(previousAdjustmentSecond);
 
-        uint256 adjustmentPerSecond = (_ratioDifference.mul(_tokenTotalSupply)) / 365 days / PRECISION_MULTIPLIER;
-        return _min(adjustmentPerSecond, maxAdjustmentPerSecond).mul(secondsSinceLastAdjustment).mul(_tokenTotalSupply);
+        uint256 adjustmentPerSecond = _ratioDifference / 365 days;
+        return (_min(adjustmentPerSecond, maxAdjustmentPerSecond).mul(secondsSinceLastAdjustment).mul(_tokenTotalSupply)) / PRECISION_MULTIPLIER;
     }
 
     function _min(uint256 a, uint256 b) internal returns(uint256) {
