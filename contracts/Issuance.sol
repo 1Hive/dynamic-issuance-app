@@ -64,7 +64,7 @@ contract Issuance is AragonApp {
         uint256 commonPoolBalanceWithPrecision = commonPoolBalance.mul(TOKEN_PRECISION).mul(RATIO_PRECISION);
         uint256 balanceToSupplyRatio = commonPoolBalanceWithPrecision.div(tokenTotalSupply);
 
-        // Note targetRatio is fractional targetRatio * BREAK_EVEN_RATIO, this operation cancels out the above BREAK_EVEN_RATIO
+        // Note targetRatio is fractional targetRatio * RATIO_PRECISION, this operation cancels out the previously applied RATIO_PRECISION
         uint256 balanceToTargetRatio = balanceToSupplyRatio.div(targetRatio);
 
         if (balanceToTargetRatio > TOKEN_PRECISION) { // balanceToTargetRatio > ratio 1 * TOKEN_PRECISION
@@ -99,7 +99,7 @@ contract Issuance is AragonApp {
         uint256 secondsSinceLastAdjustment = getTimestamp().sub(previousAdjustmentSecond);
 
         uint256 adjustmentPerSecond = _ratioDifference / 365 days;
-        return (_min(adjustmentPerSecond, maxAdjustmentPerSecond).mul(secondsSinceLastAdjustment).mul(_tokenTotalSupply)) / TOKEN_PRECISION;
+        return _min(adjustmentPerSecond, maxAdjustmentPerSecond).mul(secondsSinceLastAdjustment).mul(_tokenTotalSupply) / TOKEN_PRECISION;
     }
 
     function _min(uint256 a, uint256 b) internal returns(uint256) {
