@@ -26,7 +26,7 @@ contract Issuance is AragonApp {
     event SettingsUpdated(uint256 targetRatio, uint256 maxAdjustmentPerSecond);
 
     /**
-    * @param _targetRatio Fractional ratio value multiplied by no adjustment ratio, eg target ratio of 0.2 would be 2e17
+    * @param _targetRatio Fractional ratio value multiplied by RATIO_PRECISION, eg target ratio of 0.2 would be 2e9
     */
     function initialize(
         HookedTokenManager _commonPoolTokenManager,
@@ -48,9 +48,10 @@ contract Issuance is AragonApp {
         initialized();
     }
 
-    function updateSettings(uint256 _targetRatio, uint256 _maxAdjustmentPerSecond) external {
+    function updateSettings(uint256 _targetRatio, uint256 _maxAdjustmentPerSecond) external auth(UPDATE_SETTINGS_ROLE) {
         targetRatio = _targetRatio;
         maxAdjustmentPerSecond = _maxAdjustmentPerSecond;
+
         SettingsUpdated(_targetRatio, _maxAdjustmentPerSecond);
     }
 
@@ -61,6 +62,7 @@ contract Issuance is AragonApp {
         uint256 tokenTotalSupply = commonPoolToken.totalSupply();
         uint256 targetBalance = tokenTotalSupply.mul(targetRatio).div(RATIO_PRECISION);
 
+        // We must increase the token precision so we can divide by the total supply without reaching 0
         uint256 commonPoolBalanceWithPrecision = commonPoolBalance.mul(TOKEN_PRECISION).mul(RATIO_PRECISION);
         uint256 balanceToSupplyRatio = commonPoolBalanceWithPrecision.div(tokenTotalSupply);
 
@@ -95,14 +97,15 @@ contract Issuance is AragonApp {
         previousAdjustmentSecond = getTimestamp();
     }
 
-    function _totalAdjustment(uint256 _ratioDifference, uint256 _tokenTotalSupply) internal returns (uint256) {
+    function _totalAdjustment(uint256 _ratioDifference, uint256 _tokenTotalSupply) internal view returns (uint256) {
         uint256 secondsSinceLastAdjustment = getTimestamp().sub(previousAdjustmentSecond);
 
         uint256 adjustmentPerSecond = _ratioDifference / 365 days;
+        // Divide by TOKEN_PRECISION to cancel out initial precision increase
         return _min(adjustmentPerSecond, maxAdjustmentPerSecond).mul(secondsSinceLastAdjustment).mul(_tokenTotalSupply) / TOKEN_PRECISION;
     }
 
-    function _min(uint256 a, uint256 b) internal returns(uint256) {
+    function _min(uint256 a, uint256 b) internal pure returns(uint256) {
         return a < b ? a : b;
     }
 }
