@@ -12,7 +12,7 @@ contract Issuance is AragonApp {
 
     bytes32 constant public UPDATE_SETTINGS_ROLE = keccak256("UPDATE_SETTINGS_ROLE");
 
-    uint256 constant public TOKEN_PRECISION = 1e18;
+    uint256 constant public EXTRA_PRECISION = 1e18;
     uint256 constant public RATIO_PRECISION = 1e10;
 
     HookedTokenManager public commonPoolTokenManager;
@@ -62,15 +62,16 @@ contract Issuance is AragonApp {
         uint256 tokenTotalSupply = commonPoolToken.totalSupply();
         uint256 targetBalance = tokenTotalSupply.mul(targetRatio).div(RATIO_PRECISION);
 
-        // We must increase the token precision so we can divide by the total supply without reaching 0
-        uint256 commonPoolBalanceWithPrecision = commonPoolBalance.mul(TOKEN_PRECISION).mul(RATIO_PRECISION);
+        // We must increase the balance amounts precision so we can divide by the
+        // total supply without reaching 0 and to represent a fractional ratio
+        uint256 commonPoolBalanceWithPrecision = commonPoolBalance.mul(EXTRA_PRECISION).mul(RATIO_PRECISION);
         uint256 balanceToSupplyRatio = commonPoolBalanceWithPrecision.div(tokenTotalSupply);
 
         // Note targetRatio is fractional targetRatio * RATIO_PRECISION, this operation cancels out the previously applied RATIO_PRECISION
         uint256 balanceToTargetRatio = balanceToSupplyRatio.div(targetRatio);
 
-        if (balanceToTargetRatio > TOKEN_PRECISION) { // balanceToTargetRatio > ratio 1 * TOKEN_PRECISION
-            uint256 totalToBurn = _totalAdjustment(balanceToTargetRatio - TOKEN_PRECISION, tokenTotalSupply);
+        if (balanceToTargetRatio > EXTRA_PRECISION) { // balanceToTargetRatio > ratio 1 * EXTRA_PRECISION
+            uint256 totalToBurn = _totalAdjustment(balanceToTargetRatio - EXTRA_PRECISION, tokenTotalSupply);
             // If the totalToBurn makes the balance less than the target, only reduce to the target value
             if (totalToBurn > commonPoolBalance || commonPoolBalance.sub(totalToBurn) < targetBalance) {
                 totalToBurn = commonPoolBalance.sub(targetBalance);
@@ -81,8 +82,8 @@ contract Issuance is AragonApp {
 
             emit AdjustmentMade(totalToBurn, false);
 
-        } else if (balanceToTargetRatio < TOKEN_PRECISION) { // balanceToTargetRatio < ratio 1 * TOKEN_PRECISION
-            uint256 totalToMint = _totalAdjustment(TOKEN_PRECISION - balanceToTargetRatio, tokenTotalSupply);
+        } else if (balanceToTargetRatio < EXTRA_PRECISION) { // balanceToTargetRatio < ratio 1 * EXTRA_PRECISION
+            uint256 totalToMint = _totalAdjustment(EXTRA_PRECISION - balanceToTargetRatio, tokenTotalSupply);
             // If the totalToMint makes the balance more than the target, only increase to the target value
             if (commonPoolBalance.add(totalToMint) > targetBalance) {
                 totalToMint = targetBalance.sub(commonPoolBalance);
@@ -101,8 +102,8 @@ contract Issuance is AragonApp {
         uint256 secondsSinceLastAdjustment = getTimestamp().sub(previousAdjustmentSecond);
 
         uint256 adjustmentPerSecond = _ratioDifference / 365 days;
-        // Divide by TOKEN_PRECISION to cancel out initial precision increase
-        return _min(adjustmentPerSecond, maxAdjustmentPerSecond).mul(secondsSinceLastAdjustment).mul(_tokenTotalSupply) / TOKEN_PRECISION;
+        // Divide by EXTRA_PRECISION to cancel out initial precision increase
+        return _min(adjustmentPerSecond, maxAdjustmentPerSecond).mul(secondsSinceLastAdjustment).mul(_tokenTotalSupply) / EXTRA_PRECISION;
     }
 
     function _min(uint256 a, uint256 b) internal pure returns(uint256) {
