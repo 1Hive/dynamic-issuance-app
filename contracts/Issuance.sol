@@ -96,7 +96,7 @@ contract Issuance is AragonApp {
         if (balanceToTargetRatio > EXTRA_PRECISION) { // balanceToTargetRatio > ratio 1 * EXTRA_PRECISION
             uint256 totalToBurn = _totalAdjustment(balanceToTargetRatio - EXTRA_PRECISION, tokenTotalSupply);
             // If the totalToBurn makes the balance less than the targetBalance, only reduce to the targetBalance
-            if (totalToBurn > commonPoolBalance || commonPoolBalance.sub(totalToBurn) < targetBalance) {
+            if (totalToBurn > commonPoolBalance || (commonPoolBalance - totalToBurn) < targetBalance) {
                 totalToBurn = commonPoolBalance.sub(targetBalance);
             }
             commonPoolTokenManager.burn(commonPoolVault, totalToBurn);
