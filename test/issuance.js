@@ -37,9 +37,9 @@ contract('Issuance', ([appManager]) => {
     return await adjustmentFromRatioPerSecond(tokenTotalSupply, adjustmentRatioPerSecond)
   }
 
-  const adjustmentFromRatioPerSecond = async (tokenTotalSupply, maxAdjustmentPerSecond) => {
+  const adjustmentFromRatioPerSecond = async (tokenTotalSupply, maxAdjustmentRatioPerSecond) => {
     const secondsPast = await secondsSincePreviousAdjustment()
-    return ((maxAdjustmentPerSecond.mul(secondsPast)).mul(tokenTotalSupply)).div(EXTRA_PRECISION)
+    return ((maxAdjustmentRatioPerSecond.mul(secondsPast)).mul(tokenTotalSupply)).div(EXTRA_PRECISION)
   }
 
   const secondsSincePreviousAdjustment = async () => {
@@ -89,7 +89,7 @@ contract('Issuance', ([appManager]) => {
       assert.equal(await issuance.commonPoolVault(), vault.address, 'Incorrect vault')
       assert.equal(await issuance.commonPoolToken(), commonPoolToken.address, 'Incorrect token')
       assertBn(await issuance.targetRatio(), INITIAL_TARGET_RATIO, 'Incorrect target ratio')
-      assertBn(await issuance.maxAdjustmentPerSecond(), INITIAL_MAX_ADJUSTMENT_PER_SECOND, 'Incorrect max adjustment per second')
+      assertBn(await issuance.maxAdjustmentRatioPerSecond(), INITIAL_MAX_ADJUSTMENT_PER_SECOND, 'Incorrect max adjustment per second')
       assert.closeTo((await issuance.previousAdjustmentSecond()).toNumber(), secondDeployed.toNumber(), 3, 'Incorrect previous adjustment second')
     })
 
@@ -118,16 +118,16 @@ contract('Issuance', ([appManager]) => {
       })
     })
 
-    context('updateMaxAdjustmentPerSecond(uint256 _maxAdjustmentPerSecond)', async () => {
+    context('updateMaxAdjustmentRatioPerSecond(uint256 _maxAdjustmentRatioPerSecond)', async () => {
       it('updates max adjustment per second', async() => {
-        const expectedMaxAdjustmentPerSecond = bigExp(1, 9)
-        await issuance.updateMaxAdjustmentPerSecond(expectedMaxAdjustmentPerSecond)
-        assertBn(await issuance.maxAdjustmentPerSecond(), expectedMaxAdjustmentPerSecond, 'Incorrect max adjustment per second')
+        const expectedMaxAdjustmentRatioPerSecond = bigExp(1, 9)
+        await issuance.updateMaxAdjustmentRatioPerSecond(expectedMaxAdjustmentRatioPerSecond)
+        assertBn(await issuance.maxAdjustmentRatioPerSecond(), expectedMaxAdjustmentRatioPerSecond, 'Incorrect max adjustment per second')
       })
 
       it('reverts when no permission', async () => {
         await acl.revokePermission(ANY_ADDRESS, issuance.address, await issuance.UPDATE_SETTINGS_ROLE())
-        await assertRevert(issuance.updateMaxAdjustmentPerSecond(INITIAL_MAX_ADJUSTMENT_PER_SECOND), 'APP_AUTH_FAILED')
+        await assertRevert(issuance.updateMaxAdjustmentRatioPerSecond(INITIAL_MAX_ADJUSTMENT_PER_SECOND), 'APP_AUTH_FAILED')
       })
     })
 
@@ -174,11 +174,11 @@ contract('Issuance', ([appManager]) => {
         })
 
         it('falls back to max adjustment per second when calculated adjustment per second is bigger', async () => {
-          const newMaxAdjustmentPerSecond = bigExp(1, 9)
+          const newMaxAdjustmentRatioPerSecond = bigExp(1, 9)
           const commonPoolBalanceBefore = await commonPoolToken.balanceOf(vault.address)
           await issuance.mockIncreaseTime(ONE_DAY * 10)
-          await issuance.updateMaxAdjustmentPerSecond(newMaxAdjustmentPerSecond)
-          const expectedBurnAmount = await adjustmentFromRatioPerSecond(TOTAL_SUPPLY, newMaxAdjustmentPerSecond)
+          await issuance.updateMaxAdjustmentRatioPerSecond(newMaxAdjustmentRatioPerSecond)
+          const expectedBurnAmount = await adjustmentFromRatioPerSecond(TOTAL_SUPPLY, newMaxAdjustmentRatioPerSecond)
 
           await issuance.executeAdjustment()
 
@@ -253,11 +253,11 @@ contract('Issuance', ([appManager]) => {
         })
 
         it('falls back to max adjustment per second when calculated adjustment per second is bigger', async () => {
-          const newMaxAdjustmentPerSecond = bigExp(1, 9)
+          const newMaxAdjustmentRatioPerSecond = bigExp(1, 9)
           const commonPoolBalanceBefore = await commonPoolToken.balanceOf(vault.address)
           await issuance.mockIncreaseTime(ONE_DAY * 16)
-          await issuance.updateMaxAdjustmentPerSecond(newMaxAdjustmentPerSecond)
-          const expectedMintAmount = await adjustmentFromRatioPerSecond(TOTAL_SUPPLY, newMaxAdjustmentPerSecond)
+          await issuance.updateMaxAdjustmentRatioPerSecond(newMaxAdjustmentRatioPerSecond)
+          const expectedMintAmount = await adjustmentFromRatioPerSecond(TOTAL_SUPPLY, newMaxAdjustmentRatioPerSecond)
 
           await issuance.executeAdjustment()
 
