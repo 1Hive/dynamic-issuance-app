@@ -2,7 +2,6 @@ pragma solidity ^0.4.24;
 
 import "@aragon/os/contracts/apps/AragonApp.sol";
 import "@aragon/os/contracts/lib/math/SafeMath.sol";
-import "@aragon/os/contracts/lib/token/ERC20.sol";
 import "@1hive/apps-token-manager/contracts/HookedTokenManager.sol";
 import "@aragon/apps-vault/contracts/Vault.sol";
 
@@ -19,7 +18,7 @@ contract Issuance is AragonApp {
 
     HookedTokenManager public commonPoolTokenManager;
     Vault public commonPoolVault;
-    ERC20 public commonPoolToken;
+    MiniMeToken public commonPoolToken;
     uint256 public targetRatio;
     uint256 public maxAdjustmentRatioPerSecond;
     uint256 public previousAdjustmentSecond;
@@ -32,14 +31,12 @@ contract Issuance is AragonApp {
     * @notice Initialise the Issuance app
     * @param _commonPoolTokenManager Token Manager managing the common pool token
     * @param _commonPoolVault Vault holding the common pools token balance
-    * @param _commonPoolToken The token to be issued
     * @param _targetRatio Fractional ratio value multiplied by RATIO_PRECISION, eg target ratio of 0.2 would be 2e9
     * @param _maxAdjustmentRatioPerSecond The fractional token amount multiplied by EXTRA_PRECISION eg adjustment ratio per second of 0.005 would be 5e15
     */
     function initialize(
         HookedTokenManager _commonPoolTokenManager,
         Vault _commonPoolVault,
-        ERC20 _commonPoolToken,
         uint256 _targetRatio,
         uint256 _maxAdjustmentRatioPerSecond
     )
@@ -49,7 +46,7 @@ contract Issuance is AragonApp {
 
         commonPoolTokenManager = _commonPoolTokenManager;
         commonPoolVault = _commonPoolVault;
-        commonPoolToken = _commonPoolToken;
+        commonPoolToken = _commonPoolTokenManager.token();
         targetRatio = _targetRatio;
         maxAdjustmentRatioPerSecond = _maxAdjustmentRatioPerSecond;
 

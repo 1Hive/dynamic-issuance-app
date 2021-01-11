@@ -80,7 +80,7 @@ contract('Issuance', ([appManager]) => {
 
     beforeEach(async () => {
       secondDeployed = await issuance.getTimestampPublic()
-      await issuance.initialize(tokenManager.address, vault.address, commonPoolToken.address,
+      await issuance.initialize(tokenManager.address, vault.address,
         INITIAL_TARGET_RATIO, INITIAL_MAX_ADJUSTMENT_PER_SECOND)
     })
 
@@ -96,7 +96,7 @@ contract('Issuance', ([appManager]) => {
     it('reverts when target ratio more than ratio precision', async () => {
       const issuanceAddress = await newApp(dao, 'issuance', issuanceBase.address, appManager)
       issuance = await Issuance.at(issuanceAddress)
-      await assertRevert(issuance.initialize(tokenManager.address, vault.address, commonPoolToken.address,
+      await assertRevert(issuance.initialize(tokenManager.address, vault.address,
         RATIO_PRECISION.add(bn(1)), INITIAL_MAX_ADJUSTMENT_PER_SECOND), 'ISSUANCE_TARGET_RATIO_TOO_HIGH')
     })
 

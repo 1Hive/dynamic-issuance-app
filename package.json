@@ -1,6 +1,6 @@
 {
   "name": "@1hive/apps-issuance",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "dynamic issuance app",
   "scripts": {
     "build-app": "cd app && npm install && cd ..",
