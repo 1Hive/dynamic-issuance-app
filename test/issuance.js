@@ -21,8 +21,9 @@ contract('Issuance', ([appManager]) => {
 
   const INITIAL_TARGET_RATIO = bigExp(2, 9) // 0.2 (20% of total supply)
   // The initial adjustment per second with a total supply of 100 tokens, target 20 (20% of total supply) and balance
-  // 10 or 30, is 15854895991 ~ 1.5e10. Therefore 1e11 is slightly bigger and will initially be ignored.
-  const INITIAL_MAX_ADJUSTMENT_PER_SECOND = bigExp(1, 11)
+  // 10 or 30 before being adjusted with the target ratio is 10 / 100 / 31536000 = 3170979198 ~ 31e8. Therefore 32e8 is
+  // slightly bigger and will initially be ignored.
+  const INITIAL_MAX_ADJUSTMENT_PER_SECOND = bigExp(32, 8)
 
   const calculateAdjustment = async (commonPoolBalance, tokenTotalSupply, targetRatio) => {
     const ratio = ((commonPoolBalance.mul(EXTRA_PRECISION).mul(RATIO_PRECISION)).div(tokenTotalSupply)).div(targetRatio)
@@ -174,11 +175,12 @@ contract('Issuance', ([appManager]) => {
         })
 
         it('falls back to max adjustment per second when calculated adjustment per second is bigger', async () => {
-          const newMaxAdjustmentRatioPerSecond = bigExp(1, 9)
+          const newMaxAdjustmentRatioPerSecond = bn('3170979198') // 0.1 / 365 days
+          const newMaxAdjustmentRatioPerSecondAdjusted = newMaxAdjustmentRatioPerSecond.mul(RATIO_PRECISION).div(INITIAL_TARGET_RATIO)
           const commonPoolBalanceBefore = await commonPoolToken.balanceOf(vault.address)
           await issuance.mockIncreaseTime(ONE_DAY * 10)
           await issuance.updateMaxAdjustmentRatioPerSecond(newMaxAdjustmentRatioPerSecond)
-          const expectedBurnAmount = await adjustmentFromRatioPerSecond(TOTAL_SUPPLY, newMaxAdjustmentRatioPerSecond)
+          const expectedBurnAmount = await adjustmentFromRatioPerSecond(TOTAL_SUPPLY, newMaxAdjustmentRatioPerSecondAdjusted)
 
           await issuance.executeAdjustment()
 
@@ -253,11 +255,12 @@ contract('Issuance', ([appManager]) => {
         })
 
         it('falls back to max adjustment per second when calculated adjustment per second is bigger', async () => {
-          const newMaxAdjustmentRatioPerSecond = bigExp(1, 9)
+          const newMaxAdjustmentRatioPerSecond = bn('3170979198') // 0.1 / 365 days
+          const newMaxAdjustmentRatioPerSecondAdjusted = newMaxAdjustmentRatioPerSecond.mul(RATIO_PRECISION).div(INITIAL_TARGET_RATIO)
           const commonPoolBalanceBefore = await commonPoolToken.balanceOf(vault.address)
           await issuance.mockIncreaseTime(ONE_DAY * 16)
           await issuance.updateMaxAdjustmentRatioPerSecond(newMaxAdjustmentRatioPerSecond)
-          const expectedMintAmount = await adjustmentFromRatioPerSecond(TOTAL_SUPPLY, newMaxAdjustmentRatioPerSecond)
+          const expectedMintAmount = await adjustmentFromRatioPerSecond(TOTAL_SUPPLY, newMaxAdjustmentRatioPerSecondAdjusted)
 
           await issuance.executeAdjustment()
 
