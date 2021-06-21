@@ -12,18 +12,30 @@ contract Issuance is AragonApp {
     bytes32 constant public UPDATE_SETTINGS_ROLE = keccak256("UPDATE_SETTINGS_ROLE");
 
     string constant public ERROR_TARGET_RATIO_TOO_HIGH = "ISSUANCE_TARGET_RATIO_TOO_HIGH";
+    string constant public ERROR_ALREADY_FINALISED = "ISSUANCE_ALREADY_FINALISED";
 
     uint256 constant public EXTRA_PRECISION = 1e18;
     uint256 constant public RATIO_PRECISION = 1e10;
+
+    struct IssuanceRequest {
+        uint256 timestamp;
+        uint256 amount;
+        bool isMint;
+        bool finalised;
+    }
 
     HookedTokenManager public commonPoolTokenManager;
     Vault public commonPoolVault;
     MiniMeToken public commonPoolToken;
     uint256 public targetRatio;
     uint256 public maxAdjustmentRatioPerSecond;
-    uint256 public previousAdjustmentSecond;
+    IssuanceRequest[] public issuanceRequests;
+    uint256 public pendingTotalSupply;
+    uint256 public pendingMintAmount;
+    uint256 public pendingBurnAmount;
 
-    event AdjustmentMade(uint256 adjustmentAmount, bool positive);
+    event IssuanceProposed(uint256 indexed requestId, uint256 adjustmentAmount, bool positive);
+    event IssuanceFinalised(uint256 indexed requestId, uint256 adjustmentAmount, bool positive);
     event TargetRatioUpdated(uint256 targetRatio);
     event MaxAdjustmentRatioPerSecondUpdated(uint256 maxAdjustmentRatioPerSecond);
 
@@ -51,7 +63,8 @@ contract Issuance is AragonApp {
         targetRatio = _targetRatio;
         maxAdjustmentRatioPerSecond = _maxAdjustmentRatioPerSecond;
 
-        previousAdjustmentSecond = getTimestamp();
+        pendingTotalSupply = commonPoolToken.totalSupply();
+        issuanceRequests.push(IssuanceRequest(getTimestamp(), 0, true, true));
 
         initialized();
     }
@@ -78,49 +91,83 @@ contract Issuance is AragonApp {
     /**
     * @notice Execute the adjustment to the total supply of the common pool token and burn or mint to the common pool vault
     */
-    function executeAdjustment() external {
-        uint256 commonPoolBalance = commonPoolVault.balance(commonPoolToken);
-        uint256 tokenTotalSupply = commonPoolToken.totalSupply();
-        uint256 targetBalance = tokenTotalSupply.mul(targetRatio).div(RATIO_PRECISION);
+    function requestIssuance() external {
+        uint256 pendingCommonPoolBalance = commonPoolVault.balance(commonPoolToken).add(pendingMintAmount).sub(pendingBurnAmount);
+        uint256 previousAdjustmentSecond = issuanceRequests[issuanceRequests.length - 1].timestamp;
+        (uint256 issuanceAmount, bool isMint) =
+            _getIssuanceAmount(pendingCommonPoolBalance, pendingTotalSupply, previousAdjustmentSecond);
+
+        pendingTotalSupply = isMint ? pendingTotalSupply.add(issuanceAmount) : pendingTotalSupply.sub(issuanceAmount);
+        if (isMint) {
+            pendingMintAmount += issuanceAmount;
+        } else {
+            pendingBurnAmount += issuanceAmount;
+        }
+
+        uint256 issuanceRequestId = issuanceRequests.length;
+        issuanceRequests.push(IssuanceRequest(getTimestamp(), issuanceAmount, isMint, false));
+
+        _updateTokenOnL1(issuanceAmount, isMint);
+
+        emit IssuanceProposed(issuanceRequestId, issuanceAmount, isMint);
+    }
+
+    function finaliseIssuance(uint256 _issuanceRequestId) external {
+        // TODO: require(sender is arbitrum bridge and function caller is equivelant mainnet contract)
+        IssuanceRequest storage issuanceRequest = issuanceRequests[_issuanceRequestId];
+        require(!issuanceRequest.finalised, ERROR_ALREADY_FINALISED);
+
+        issuanceRequest.finalised = true;
+
+        if (issuanceRequest.isMint) {
+            commonPoolTokenManager.mint(commonPoolVault, issuanceRequest.amount);
+            pendingMintAmount -= issuanceRequest.amount;
+        } else {
+            commonPoolTokenManager.burn(commonPoolVault, issuanceRequest.amount);
+            pendingBurnAmount -= issuanceRequest.amount;
+        }
+
+        emit IssuanceFinalised(_issuanceRequestId, issuanceRequest.amount, issuanceRequest.isMint);
+    }
+
+    function _getIssuanceAmount(uint256 _pendingCommonPoolBalance, uint256 _pendingTotalSupply, uint256 _previousAdjustmentSecond) internal view returns (uint256 amount, bool isMint) {
+        uint256 targetBalance = _pendingTotalSupply.mul(targetRatio).div(RATIO_PRECISION);
 
         // We must increase the balance amounts precision so we can divide by the
         // total supply without reaching 0 and to represent a fractional ratio
-        uint256 commonPoolBalanceWithPrecision = commonPoolBalance.mul(EXTRA_PRECISION).mul(RATIO_PRECISION);
-        uint256 balanceToSupplyRatio = commonPoolBalanceWithPrecision.div(tokenTotalSupply);
+        uint256 commonPoolBalanceWithPrecision = _pendingCommonPoolBalance.mul(EXTRA_PRECISION).mul(RATIO_PRECISION);
+        uint256 balanceToSupplyRatio = commonPoolBalanceWithPrecision.div(_pendingTotalSupply);
 
         // Note targetRatio is the fractional targetRatio * RATIO_PRECISION, this operation cancels out the previously applied RATIO_PRECISION
         uint256 balanceToSupplyToTargetRatio = balanceToSupplyRatio.div(targetRatio);
 
         if (balanceToSupplyToTargetRatio > EXTRA_PRECISION) { // balanceToTargetRatio > ratio 1 * EXTRA_PRECISION
-            uint256 totalToBurn = _totalAdjustment(balanceToSupplyToTargetRatio - EXTRA_PRECISION, tokenTotalSupply);
+            uint256 totalToBurn =
+                _totalAdjustment(balanceToSupplyToTargetRatio - EXTRA_PRECISION, _pendingTotalSupply, _previousAdjustmentSecond);
 
             // If the totalToBurn makes the balance less than the targetBalance, only reduce to the targetBalance
-            if (totalToBurn > commonPoolBalance || (commonPoolBalance - totalToBurn) < targetBalance) {
-                totalToBurn = commonPoolBalance.sub(targetBalance);
+            if (totalToBurn > _pendingCommonPoolBalance || (_pendingCommonPoolBalance - totalToBurn) < targetBalance) {
+                totalToBurn = _pendingCommonPoolBalance.sub(targetBalance);
             }
 
-            commonPoolTokenManager.burn(commonPoolVault, totalToBurn);
-
-            emit AdjustmentMade(totalToBurn, false);
-
+            return (totalToBurn, false);
         } else if (balanceToSupplyToTargetRatio < EXTRA_PRECISION) { // balanceToTargetRatio < ratio 1 * EXTRA_PRECISION
-            uint256 totalToMint = _totalAdjustment(EXTRA_PRECISION - balanceToSupplyToTargetRatio, tokenTotalSupply);
+            uint256 totalToMint =
+                _totalAdjustment(EXTRA_PRECISION - balanceToSupplyToTargetRatio, _pendingTotalSupply, _previousAdjustmentSecond);
 
             // If the totalToMint makes the balance more than the targetBalance, only increase to the targetBalance
-            if (commonPoolBalance.add(totalToMint) > targetBalance) {
-                totalToMint = targetBalance.sub(commonPoolBalance);
+            if (_pendingCommonPoolBalance.add(totalToMint) > targetBalance) {
+                totalToMint = targetBalance.sub(_pendingCommonPoolBalance);
             }
 
-            commonPoolTokenManager.mint(commonPoolVault, totalToMint);
-
-            emit AdjustmentMade(totalToMint, true);
+            return (totalToBurn, true);
+        } else {
+            return (0, true);
         }
-
-        previousAdjustmentSecond = getTimestamp();
     }
 
-    function _totalAdjustment(uint256 _ratioDifference, uint256 _tokenTotalSupply) internal view returns (uint256) {
-        uint256 secondsSinceLastAdjustment = getTimestamp().sub(previousAdjustmentSecond);
+    function _totalAdjustment(uint256 _ratioDifference, uint256 _tokenTotalSupply, uint256 _previousAdjustmentSecond) internal view returns (uint256) {
+        uint256 secondsSinceLastAdjustment = getTimestamp().sub(_previousAdjustmentSecond);
 
         uint256 adjustmentRatioPerSecond = _ratioDifference / 365 days;
         uint256 maxAdjustmentRatioPerSecondAdjusted = maxAdjustmentRatioPerSecond.mul(RATIO_PRECISION) / targetRatio;
@@ -131,5 +178,9 @@ contract Issuance is AragonApp {
 
     function _min(uint256 a, uint256 b) internal pure returns(uint256) {
         return a < b ? a : b;
+    }
+
+    function _updateTokenOnL1(uint256 _amount, bool _isMint) internal {
+        // TODO: Send tokens if burning
     }
 }
