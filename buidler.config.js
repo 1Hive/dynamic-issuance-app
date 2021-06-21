@@ -11,7 +11,7 @@ module.exports = {
       url: 'http://localhost:8545',
     },
     rinkeby: {
-      url: 'https://rinkeby.eth.aragon.network',
+      url: 'https://rinkeby.infura.io/v3/460f40a260564ac4a4f4b3fffb032dad',
       accounts: [process.env.ETH_KEY],
       gas: 7.9e6,
       gasPrice: 15000000001
