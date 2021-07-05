@@ -8,7 +8,7 @@ const TokenManager = artifacts.require('HookedTokenManager.sol')
 const Vault = artifacts.require('Vault.sol')
 const MiniMeToken = artifacts.require('MiniMeToken.sol')
 
-contract('Issuance', ([appManager]) => {
+contract('Issuance', ([appManager, l1Issuance]) => {
 
   let dao, acl
   let tokenManagerBase, tokenManager, vaultBase, vault, issuanceBase, issuance, commonPoolToken
@@ -81,7 +81,7 @@ contract('Issuance', ([appManager]) => {
 
     beforeEach(async () => {
       secondDeployed = await issuance.getTimestampPublic()
-      await issuance.initialize(tokenManager.address, vault.address,
+      await issuance.initialize(tokenManager.address, vault.address, l1Issuance,
         INITIAL_TARGET_RATIO, INITIAL_MAX_ADJUSTMENT_PER_SECOND)
     })
 
@@ -97,7 +97,7 @@ contract('Issuance', ([appManager]) => {
     it('reverts when target ratio more than ratio precision', async () => {
       const issuanceAddress = await newApp(dao, 'issuance', issuanceBase.address, appManager)
       issuance = await Issuance.at(issuanceAddress)
-      await assertRevert(issuance.initialize(tokenManager.address, vault.address,
+      await assertRevert(issuance.initialize(tokenManager.address, vault.address, l1Issuance,
         RATIO_PRECISION.add(bn(1)), INITIAL_MAX_ADJUSTMENT_PER_SECOND), 'ISSUANCE_TARGET_RATIO_TOO_HIGH')
     })
 

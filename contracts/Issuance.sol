@@ -4,7 +4,7 @@ import "@aragon/os/contracts/apps/AragonApp.sol";
 import "@aragon/os/contracts/lib/math/SafeMath.sol";
 import "@1hive/apps-token-manager/contracts/HookedTokenManager.sol";
 import "@aragon/apps-vault/contracts/Vault.sol";
-
+import "./ArbSys.sol";
 
 contract Issuance is AragonApp {
     using SafeMath for uint256;
@@ -13,12 +13,14 @@ contract Issuance is AragonApp {
 
     string constant public ERROR_TARGET_RATIO_TOO_HIGH = "ISSUANCE_TARGET_RATIO_TOO_HIGH";
 
+    address constant public ARBSYS_ADDRESS = address(100);
     uint256 constant public EXTRA_PRECISION = 1e18;
     uint256 constant public RATIO_PRECISION = 1e10;
 
     HookedTokenManager public commonPoolTokenManager;
     Vault public commonPoolVault;
     MiniMeToken public commonPoolToken;
+    address public l1Issuance;
     uint256 public targetRatio;
     uint256 public maxAdjustmentRatioPerSecond;
     uint256 public previousAdjustmentSecond;
@@ -38,6 +40,7 @@ contract Issuance is AragonApp {
     function initialize(
         HookedTokenManager _commonPoolTokenManager,
         Vault _commonPoolVault,
+        address _l1Issuance,
         uint256 _targetRatio,
         uint256 _maxAdjustmentRatioPerSecond
     )
@@ -48,6 +51,7 @@ contract Issuance is AragonApp {
         commonPoolTokenManager = _commonPoolTokenManager;
         commonPoolVault = _commonPoolVault;
         commonPoolToken = _commonPoolTokenManager.token();
+        l1Issuance = _l1Issuance;
         targetRatio = _targetRatio;
         maxAdjustmentRatioPerSecond = _maxAdjustmentRatioPerSecond;
 
@@ -101,6 +105,8 @@ contract Issuance is AragonApp {
 
             commonPoolTokenManager.burn(commonPoolVault, totalToBurn);
 
+            _burnTokensOnL1(totalToBurn);
+
             emit AdjustmentMade(totalToBurn, false);
 
         } else if (balanceToSupplyToTargetRatio < EXTRA_PRECISION) { // balanceToTargetRatio < ratio 1 * EXTRA_PRECISION
@@ -112,6 +118,8 @@ contract Issuance is AragonApp {
             }
 
             commonPoolTokenManager.mint(commonPoolVault, totalToMint);
+
+            _mintTokensOnL1(totalToMint);
 
             emit AdjustmentMade(totalToMint, true);
         }
@@ -131,5 +139,15 @@ contract Issuance is AragonApp {
 
     function _min(uint256 a, uint256 b) internal pure returns(uint256) {
         return a < b ? a : b;
+    }
+
+    function _burnTokensOnL1(uint256 _amount) internal {
+        bytes memory data = abi.encodeWithSignature('burnHoney(uint256)', _amount);
+//        ArbSys(ARBSYS_ADDRESS).sendTxToL1(l1Issuance, data);
+    }
+
+    function _mintTokensOnL1(uint256 _amount) internal {
+        bytes memory data = abi.encodeWithSignature('mintHoney(uint256)', _amount);
+//        ArbSys(ARBSYS_ADDRESS).sendTxToL1(l1Issuance, data);
     }
 }
