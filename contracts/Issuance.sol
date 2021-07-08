@@ -143,11 +143,11 @@ contract Issuance is AragonApp {
 
     function _burnTokensOnL1(uint256 _amount) internal {
         bytes memory data = abi.encodeWithSignature('burnHoney(uint256)', _amount);
-//        ArbSys(ARBSYS_ADDRESS).sendTxToL1(l1Issuance, data);
+        ArbSys(ARBSYS_ADDRESS).sendTxToL1(l1Issuance, data);
     }
 
     function _mintTokensOnL1(uint256 _amount) internal {
         bytes memory data = abi.encodeWithSignature('mintHoney(uint256)', _amount);
-//        ArbSys(ARBSYS_ADDRESS).sendTxToL1(l1Issuance, data);
+        ArbSys(ARBSYS_ADDRESS).sendTxToL1(l1Issuance, data);
     }
 }
