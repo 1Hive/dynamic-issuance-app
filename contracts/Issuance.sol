@@ -12,22 +12,27 @@ contract Issuance is AragonApp {
     bytes32 constant public UPDATE_SETTINGS_ROLE = keccak256("UPDATE_SETTINGS_ROLE");
 
     string constant public ERROR_TARGET_RATIO_TOO_HIGH = "ISSUANCE_TARGET_RATIO_TOO_HIGH";
+    string constant public ERROR_DELAY_NOT_PASSED = "ISSUANCE_DELAY_NOT_PASSED";
 
-    address constant public ARBSYS_ADDRESS = address(100);
     uint256 constant public EXTRA_PRECISION = 1e18;
     uint256 constant public RATIO_PRECISION = 1e10;
 
+    address public arbSysAddress = address(100); // Not constant so we can modify for testing
     HookedTokenManager public commonPoolTokenManager;
     Vault public commonPoolVault;
     MiniMeToken public commonPoolToken;
     address public l1Issuance;
     uint256 public targetRatio;
     uint256 public maxAdjustmentRatioPerSecond;
+    uint256 public executeAdjustmentDelay;
     uint256 public previousAdjustmentSecond;
+    uint256 public recentL1TransactionId;
 
     event AdjustmentMade(uint256 adjustmentAmount, bool positive);
     event TargetRatioUpdated(uint256 targetRatio);
     event MaxAdjustmentRatioPerSecondUpdated(uint256 maxAdjustmentRatioPerSecond);
+    event ExecuteAdjustmentDelayUpdated(uint256 executeAdjustmentDelay);
+    event L1TransactionSubmitted(uint256 l1TransactionId);
 
     /**
     * @notice Initialise the Issuance app
@@ -36,13 +41,15 @@ contract Issuance is AragonApp {
     * @param _targetRatio Fractional ratio value multiplied by RATIO_PRECISION, eg target ratio of 0.2 would be 2e9
     * @param _maxAdjustmentRatioPerSecond Eg A max adjustment ratio of 0.1 would be 0.1 / 31536000 (seconds in year) = 0.000000003170979198
         adjusted by multiplying by EXTRA_PRECISION = 3170979198
+    * @param _executeAdjustmentDelay Minimum delay between execute adjustment calls
     */
     function initialize(
         HookedTokenManager _commonPoolTokenManager,
         Vault _commonPoolVault,
         address _l1Issuance,
         uint256 _targetRatio,
-        uint256 _maxAdjustmentRatioPerSecond
+        uint256 _maxAdjustmentRatioPerSecond,
+        uint256 _executeAdjustmentDelay
     )
         external onlyInit
     {
@@ -54,6 +61,7 @@ contract Issuance is AragonApp {
         l1Issuance = _l1Issuance;
         targetRatio = _targetRatio;
         maxAdjustmentRatioPerSecond = _maxAdjustmentRatioPerSecond;
+        executeAdjustmentDelay = _executeAdjustmentDelay;
 
         previousAdjustmentSecond = getTimestamp();
 
@@ -80,9 +88,20 @@ contract Issuance is AragonApp {
     }
 
     /**
+    * @notice Update the execute adjustment delay `_executeAdjustmentDelay`
+    * @param _executeAdjustmentDelay Minimum delay between execute adjustment calls
+    */
+    function updateExecuteAdjustmentDelay(uint256 _executeAdjustmentDelay) external auth(UPDATE_SETTINGS_ROLE) {
+        executeAdjustmentDelay = _executeAdjustmentDelay;
+        emit ExecuteAdjustmentDelayUpdated(_executeAdjustmentDelay);
+    }
+
+    /**
     * @notice Execute the adjustment to the total supply of the common pool token and burn or mint to the common pool vault
     */
     function executeAdjustment() external {
+        require(previousAdjustmentSecond < getTimestamp().sub(executeAdjustmentDelay), ERROR_DELAY_NOT_PASSED);
+
         uint256 commonPoolBalance = commonPoolVault.balance(commonPoolToken);
         uint256 tokenTotalSupply = commonPoolToken.totalSupply();
         uint256 targetBalance = tokenTotalSupply.mul(targetRatio).div(RATIO_PRECISION);
@@ -143,11 +162,13 @@ contract Issuance is AragonApp {
 
     function _burnTokensOnL1(uint256 _amount) internal {
         bytes memory data = abi.encodeWithSignature('burnHoney(uint256)', _amount);
-        ArbSys(ARBSYS_ADDRESS).sendTxToL1(l1Issuance, data);
+        recentL1TransactionId = ArbSys(arbSysAddress).sendTxToL1(l1Issuance, data);
+        emit L1TransactionSubmitted(recentL1TransactionId);
     }
 
     function _mintTokensOnL1(uint256 _amount) internal {
         bytes memory data = abi.encodeWithSignature('mintHoney(uint256)', _amount);
-        ArbSys(ARBSYS_ADDRESS).sendTxToL1(l1Issuance, data);
+        recentL1TransactionId = ArbSys(arbSysAddress).sendTxToL1(l1Issuance, data);
+        emit L1TransactionSubmitted(recentL1TransactionId);
     }
 }
