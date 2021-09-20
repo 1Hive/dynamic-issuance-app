@@ -9,7 +9,7 @@ const TokenManager = artifacts.require('HookedTokenManager.sol')
 const Vault = artifacts.require('Vault.sol')
 const MiniMeToken = artifacts.require('MiniMeToken.sol')
 
-contract('Issuance', ([appManager, l1Issuance]) => {
+contract('Issuance', ([appManager, l1Issuance, newL1Issuance]) => {
 
   let dao, acl
   let tokenManagerBase, tokenManager, vaultBase, vault, issuanceBase, issuance, commonPoolToken, arbSys
@@ -104,6 +104,19 @@ contract('Issuance', ([appManager, l1Issuance]) => {
       issuance = await Issuance.at(issuanceAddress)
       await assertRevert(issuance.initialize(tokenManager.address, vault.address, l1Issuance,
         RATIO_PRECISION.add(bn(1)), INITIAL_MAX_ADJUSTMENT_PER_SECOND, INITIAL_EXECUTE_ADJUSTMENT_DELAY), 'ISSUANCE_TARGET_RATIO_TOO_HIGH')
+    })
+
+    context('updateL1Issuance(uint256 _l1Issuance)', async () => {
+      it('updates L1Issuance', async () => {
+        const expectedL1Issuance = newL1Issuance
+        await issuance.updateL1Issuance(expectedL1Issuance)
+        assert.equal(await issuance.l1Issuance(), expectedL1Issuance, 'Incorrect L1 Issuance')
+      })
+
+      it('reverts when no permission', async () => {
+        await acl.revokePermission(ANY_ADDRESS, issuance.address, await issuance.UPDATE_SETTINGS_ROLE())
+        await assertRevert(issuance.updateL1Issuance(newL1Issuance), 'APP_AUTH_FAILED')
+      })
     })
 
     context('updateTargetRatio(uint256 _targetRatio)', async () => {

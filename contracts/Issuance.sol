@@ -29,6 +29,7 @@ contract Issuance is AragonApp {
     uint256 public recentL1TransactionId;
 
     event AdjustmentMade(uint256 adjustmentAmount, bool positive);
+    event L1IssuanceUpdated(address l1Issuance);
     event TargetRatioUpdated(uint256 targetRatio);
     event MaxAdjustmentRatioPerSecondUpdated(uint256 maxAdjustmentRatioPerSecond);
     event ExecuteAdjustmentDelayUpdated(uint256 executeAdjustmentDelay);
@@ -66,6 +67,15 @@ contract Issuance is AragonApp {
         previousAdjustmentSecond = getTimestamp();
 
         initialized();
+    }
+
+    /**
+    * @notice Update the l1Issuance address to `_l1Issuance`
+    * @param _l1Issuance The new l1Issuance
+    */
+    function updateL1Issuance(address _l1Issuance) external auth(UPDATE_SETTINGS_ROLE) {
+        l1Issuance = _l1Issuance;
+        emit L1IssuanceUpdated(_l1Issuance);
     }
 
     /**
