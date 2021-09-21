@@ -2,7 +2,7 @@ pragma solidity ^0.4.24;
 
 import "../ArbSys.sol";
 
-contract MockArbSys is ArbSys {
+contract ArbSysMock is ArbSys {
 
     address public destination;
     bytes public calldataForL1;
