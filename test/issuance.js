@@ -4,14 +4,15 @@ const { ZERO_ADDRESS, bn, bigExp, ONE_DAY } = require('@aragon/contract-helpers-
 const { assertBn, assertRevert } = require('@aragon/contract-helpers-test/src/asserts')
 
 const Issuance = artifacts.require('MockIssuance.sol')
+const MockArbSys = artifacts.require('MockArbSys.sol')
 const TokenManager = artifacts.require('HookedTokenManager.sol')
 const Vault = artifacts.require('Vault.sol')
 const MiniMeToken = artifacts.require('MiniMeToken.sol')
 
-contract('Issuance', ([appManager]) => {
+contract('Issuance', ([appManager, l1Issuance, newL1Issuance]) => {
 
   let dao, acl
-  let tokenManagerBase, tokenManager, vaultBase, vault, issuanceBase, issuance, commonPoolToken
+  let tokenManagerBase, tokenManager, vaultBase, vault, issuanceBase, issuance, commonPoolToken, arbSys
 
   const ANY_ADDRESS = '0xffffffffffffffffffffffffffffffffffffffff'
   const EXTRA_PRECISION = bigExp(1,18);
@@ -24,6 +25,7 @@ contract('Issuance', ([appManager]) => {
   // 10 or 30 before being adjusted with the target ratio is 10 / 100 / 31536000 = 3170979198 ~ 31e8. Therefore 32e8 is
   // slightly bigger and will initially be ignored.
   const INITIAL_MAX_ADJUSTMENT_PER_SECOND = bigExp(32, 8)
+  const INITIAL_EXECUTE_ADJUSTMENT_DELAY = bn('0')
 
   const calculateAdjustment = async (commonPoolBalance, tokenTotalSupply, targetRatio) => {
     const ratio = ((commonPoolBalance.mul(EXTRA_PRECISION).mul(RATIO_PRECISION)).div(tokenTotalSupply)).div(targetRatio)
@@ -73,6 +75,8 @@ contract('Issuance', ([appManager]) => {
     const vaultAddress = await newApp(dao, 'vault', vaultBase.address, appManager)
     vault = await Vault.at(vaultAddress)
     await vault.initialize()
+
+    arbSys = await MockArbSys.new()
   })
 
   context('initialize()', () => {
@@ -81,8 +85,9 @@ contract('Issuance', ([appManager]) => {
 
     beforeEach(async () => {
       secondDeployed = await issuance.getTimestampPublic()
-      await issuance.initialize(tokenManager.address, vault.address,
-        INITIAL_TARGET_RATIO, INITIAL_MAX_ADJUSTMENT_PER_SECOND)
+      await issuance.initialize(tokenManager.address, vault.address, l1Issuance,
+        INITIAL_TARGET_RATIO, INITIAL_MAX_ADJUSTMENT_PER_SECOND, INITIAL_EXECUTE_ADJUSTMENT_DELAY)
+      await issuance.setArbSysAddress(arbSys.address)
     })
 
     it('should set init params correctly', async () => {
@@ -97,8 +102,21 @@ contract('Issuance', ([appManager]) => {
     it('reverts when target ratio more than ratio precision', async () => {
       const issuanceAddress = await newApp(dao, 'issuance', issuanceBase.address, appManager)
       issuance = await Issuance.at(issuanceAddress)
-      await assertRevert(issuance.initialize(tokenManager.address, vault.address,
-        RATIO_PRECISION.add(bn(1)), INITIAL_MAX_ADJUSTMENT_PER_SECOND), 'ISSUANCE_TARGET_RATIO_TOO_HIGH')
+      await assertRevert(issuance.initialize(tokenManager.address, vault.address, l1Issuance,
+        RATIO_PRECISION.add(bn(1)), INITIAL_MAX_ADJUSTMENT_PER_SECOND, INITIAL_EXECUTE_ADJUSTMENT_DELAY), 'ISSUANCE_TARGET_RATIO_TOO_HIGH')
+    })
+
+    context('updateL1Issuance(uint256 _l1Issuance)', async () => {
+      it('updates L1Issuance', async () => {
+        const expectedL1Issuance = newL1Issuance
+        await issuance.updateL1Issuance(expectedL1Issuance)
+        assert.equal(await issuance.l1Issuance(), expectedL1Issuance, 'Incorrect L1 Issuance')
+      })
+
+      it('reverts when no permission', async () => {
+        await acl.revokePermission(ANY_ADDRESS, issuance.address, await issuance.UPDATE_SETTINGS_ROLE())
+        await assertRevert(issuance.updateL1Issuance(newL1Issuance), 'APP_AUTH_FAILED')
+      })
     })
 
     context('updateTargetRatio(uint256 _targetRatio)', async () => {
@@ -129,6 +147,19 @@ contract('Issuance', ([appManager]) => {
       it('reverts when no permission', async () => {
         await acl.revokePermission(ANY_ADDRESS, issuance.address, await issuance.UPDATE_SETTINGS_ROLE())
         await assertRevert(issuance.updateMaxAdjustmentRatioPerSecond(INITIAL_MAX_ADJUSTMENT_PER_SECOND), 'APP_AUTH_FAILED')
+      })
+    })
+
+    context('updateExecuteAdjustmentDelay(uint256 _executeAdjustmentDelay)', async () => {
+      it('updates execute adjustment delay', async() => {
+        const expectedExecuteAdjustmentDelay = bn('86400')
+        await issuance.updateExecuteAdjustmentDelay(expectedExecuteAdjustmentDelay)
+        assertBn(await issuance.executeAdjustmentDelay(), expectedExecuteAdjustmentDelay, 'Incorrect execute adjustment delay')
+      })
+
+      it('reverts when no permission', async () => {
+        await acl.revokePermission(ANY_ADDRESS, issuance.address, await issuance.UPDATE_SETTINGS_ROLE())
+        await assertRevert(issuance.updateExecuteAdjustmentDelay(INITIAL_EXECUTE_ADJUSTMENT_DELAY), 'APP_AUTH_FAILED')
       })
     })
 
@@ -216,6 +247,14 @@ contract('Issuance', ([appManager]) => {
             assertBn(commonPoolBalanceAfter, targetAmount, 'Incorrect common pool balance')
           })
         })
+
+        it('calls arbsys to create l1 transaction', async () => {
+          await issuance.executeAdjustment()
+
+          assert.equal(await arbSys.destination(), l1Issuance, "Incorrect destination address")
+          assert.equal(await arbSys.calldataForL1(), "0x169fe237000000000000000000000000000000000000000000000000000005c49a2d69f0", "Incorrect call data for l1")
+          assert.equal(await issuance.recentL1TransactionId(), 10, "Incorrect recent transaction id")
+        })
       })
 
       context('mint adjustment', () => {
@@ -280,6 +319,24 @@ contract('Issuance', ([appManager]) => {
             const commonPoolBalanceAfter = await commonPoolToken.balanceOf(vault.address)
             assertBn(commonPoolBalanceAfter, targetAmount, 'Incorrect common pool balance')
           })
+
+        it('calls arbsys to create l1 transaction', async () => {
+          await issuance.executeAdjustment()
+
+          assert.equal(await arbSys.destination(), l1Issuance, "Incorrect destination address")
+          assert.equal(await arbSys.calldataForL1(), "0xb5cd8d00000000000000000000000000000000000000000000000000000005c49a2d69f0", "Incorrect call data for l1")
+          assert.equal(await issuance.recentL1TransactionId(), 10, "Incorrect recent transaction id")
+        })
+      })
+
+      it('can be called after execute adjustment delay', async () => {
+        const expectedExecuteAdjustmentDelay = ONE_DAY
+        await issuance.updateExecuteAdjustmentDelay(expectedExecuteAdjustmentDelay)
+        await issuance.mockIncreaseTime(expectedExecuteAdjustmentDelay + 1)
+
+        await issuance.executeAdjustment()
+
+        assertBn(await secondsSincePreviousAdjustment(), bn('0'), "Execute adjustment not successfully called")
       })
 
       it('reverts when token supply is 0', async () => {
@@ -287,6 +344,12 @@ contract('Issuance', ([appManager]) => {
         assertBn(await commonPoolToken.totalSupply(), bn(0), 'Incorrect total supply')
 
         await assertRevert(issuance.executeAdjustment(), "MATH_DIV_ZERO")
+      })
+
+      it('reverts when executed before execute adjustment delay passed', async () => {
+        const expectedExecuteAdjustmentDelay = ONE_DAY
+        await issuance.updateExecuteAdjustmentDelay(expectedExecuteAdjustmentDelay)
+        await assertRevert(issuance.executeAdjustment(), "ISSUANCE_DELAY_NOT_PASSED")
       })
     })
   })
