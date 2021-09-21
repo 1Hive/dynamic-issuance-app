@@ -4,7 +4,7 @@ const { ZERO_ADDRESS, bn, bigExp, ONE_DAY } = require('@aragon/contract-helpers-
 const { assertBn, assertRevert } = require('@aragon/contract-helpers-test/src/asserts')
 
 const Issuance = artifacts.require('IssuanceMock.sol')
-const MockArbSys = artifacts.require('ArbSysMock.sol')
+const ArbSys = artifacts.require('ArbSysMock.sol')
 const TokenManager = artifacts.require('HookedTokenManager.sol')
 const Vault = artifacts.require('Vault.sol')
 const MiniMeToken = artifacts.require('MiniMeToken.sol')
@@ -76,7 +76,7 @@ contract('Issuance', ([appManager, l1Issuance, newL1Issuance]) => {
     vault = await Vault.at(vaultAddress)
     await vault.initialize()
 
-    arbSys = await MockArbSys.new()
+    arbSys = await ArbSys.new()
   })
 
   context('initialize()', () => {
