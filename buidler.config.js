@@ -25,7 +25,8 @@ module.exports = {
     arbtest: {
       url: 'https://rinkeby.arbitrum.io/rpc',
       accounts: [process.env.ETH_KEY],
-      gasPrice: 0,
+      gasPrice: 1000000000,
+      gas: 100000000
     },
     arbitrum: {
       url: 'https://arb1.arbitrum.io/rpc',
