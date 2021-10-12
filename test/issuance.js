@@ -85,7 +85,7 @@ contract('Issuance', ([appManager, newFundsManager]) => {
       secondDeployed = await issuance.getTimestampPublic()
       await issuance.initialize(tokenManager.address, aragonVaultFundsManager.address,
         INITIAL_TARGET_RATIO, INITIAL_MAX_ADJUSTMENT_PER_SECOND)
-      await aragonVaultFundsManager.setOwner(issuance.address)
+      await aragonVaultFundsManager.addFundsUser(issuance.address)
     })
 
     it('should set init params correctly', async () => {
