@@ -1,5 +1,7 @@
-const namehash = require('eth-ens-namehash')
-const { getEventArgument } = require('@aragon/contract-test-helpers/events')
+const {
+  getEventArgument,
+} = require("@aragon/contract-helpers-test/src/events");
+const { ethers } = require("hardhat");
 const Kernel = artifacts.require('@aragon/os/contracts/kernel/Kernel')
 const ACL = artifacts.require('@aragon/os/contracts/acl/ACL')
 const EVMScriptRegistryFactory = artifacts.require(
@@ -22,7 +24,7 @@ const newDao = async (rootAccount) => {
 
   // Create a DAO instance.
   const daoReceipt = await daoFactory.newDAO(rootAccount)
-  const dao = await Kernel.at(getEventArgument(daoReceipt, 'DeployDAO', 'dao'))
+  const dao = await Kernel.at(getEventArgument(daoReceipt, "DeployDAO", "dao"));
 
   // Grant the rootAccount address permission to install apps in the DAO.
   const acl = await ACL.at(await dao.acl())
@@ -40,7 +42,7 @@ const newDao = async (rootAccount) => {
 
 const newApp = async (dao, appName, baseAppAddress, rootAccount) => {
   const receipt = await dao.newAppInstance(
-    namehash(`${appName}.aragonpm.test`), // appId - Unique identifier for each app installed in the DAO; can be any bytes32 string in the tests.
+    ethers.utils.id(`${appName}.aragonpm.test`), // appId - Unique identifier for each app installed in the DAO; can be any bytes32 string in the tests.
     baseAppAddress, // appBase - Location of the app's base implementation.
     '0x', // initializePayload - Used to instantiate and initialize the proxy in the same call (if given a non-empty bytes string).
     false, // setDefault - Whether the app proxy is the default proxy.
