@@ -32,6 +32,16 @@ module.exports = {
       accounts: [process.env.ETH_KEY],
       gasPrice: 0,
     },
+    mumbai: {
+      url: 'https://rpc-mumbai.maticvigil.com/v1/21b0f704769b8850d4e5b7a3adb9d436230ce014',
+      accounts: [process.env.ETH_KEY],
+      gasPrice: 1000000000
+    },
+    polygon: {
+      url: 'https://rpc-mainnet.maticvigil.com/v1/21b0f704769b8850d4e5b7a3adb9d436230ce014',
+      accounts: [process.env.ETH_KEY],
+      gasPrice: 60000000000
+    }
   },
   solc: {
     version: '0.4.24',
