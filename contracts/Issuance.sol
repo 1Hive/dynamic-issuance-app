@@ -3,7 +3,7 @@ pragma solidity ^0.4.24;
 import "@aragon/os/contracts/apps/AragonApp.sol";
 import "@aragon/os/contracts/lib/math/SafeMath.sol";
 import "@1hive/apps-token-manager/contracts/HookedTokenManager.sol";
-import "@aragon/apps-vault/contracts/Vault.sol";
+import "@1hive/funds-manager/contracts/FundsManager.sol";
 
 
 contract Issuance is AragonApp {
@@ -17,7 +17,7 @@ contract Issuance is AragonApp {
     uint256 constant public RATIO_PRECISION = 1e10;
 
     HookedTokenManager public commonPoolTokenManager;
-    Vault public commonPoolVault;
+    FundsManager public commonPoolFundsManager;
     MiniMeToken public commonPoolToken;
     uint256 public targetRatio;
     uint256 public maxAdjustmentRatioPerSecond;
@@ -25,19 +25,20 @@ contract Issuance is AragonApp {
 
     event AdjustmentMade(uint256 adjustmentAmount, bool positive);
     event TargetRatioUpdated(uint256 targetRatio);
+    event FundsManagerUpdated(FundsManager fundsManager);
     event MaxAdjustmentRatioPerSecondUpdated(uint256 maxAdjustmentRatioPerSecond);
 
     /**
     * @notice Initialise the Issuance app
     * @param _commonPoolTokenManager Token Manager managing the common pool token
-    * @param _commonPoolVault Vault holding the common pools token balance
+    * @param _commonPoolFundsManager Funds manager managing common pools token balance
     * @param _targetRatio Fractional ratio value multiplied by RATIO_PRECISION, eg target ratio of 0.2 would be 2e9
     * @param _maxAdjustmentRatioPerSecond Eg A max adjustment ratio of 0.1 would be 0.1 / 31536000 (seconds in year) = 0.000000003170979198
         adjusted by multiplying by EXTRA_PRECISION = 3170979198
     */
     function initialize(
         HookedTokenManager _commonPoolTokenManager,
-        Vault _commonPoolVault,
+        FundsManager _commonPoolFundsManager,
         uint256 _targetRatio,
         uint256 _maxAdjustmentRatioPerSecond
     )
@@ -46,7 +47,7 @@ contract Issuance is AragonApp {
         require(_targetRatio <= RATIO_PRECISION, ERROR_TARGET_RATIO_TOO_HIGH);
 
         commonPoolTokenManager = _commonPoolTokenManager;
-        commonPoolVault = _commonPoolVault;
+        commonPoolFundsManager = _commonPoolFundsManager;
         commonPoolToken = _commonPoolTokenManager.token();
         targetRatio = _targetRatio;
         maxAdjustmentRatioPerSecond = _maxAdjustmentRatioPerSecond;
@@ -54,6 +55,15 @@ contract Issuance is AragonApp {
         previousAdjustmentSecond = getTimestamp();
 
         initialized();
+    }
+
+    /**
+    * @notice Update the funds manager
+    * @param _commonPoolFundsManager The new funds manager
+    */
+    function updateFundsManager(FundsManager _commonPoolFundsManager) external auth(UPDATE_SETTINGS_ROLE) {
+        commonPoolFundsManager = _commonPoolFundsManager;
+        emit FundsManagerUpdated(_commonPoolFundsManager);
     }
 
     /**
@@ -79,7 +89,7 @@ contract Issuance is AragonApp {
     * @notice Execute the adjustment to the total supply of the common pool token and burn or mint to the common pool vault
     */
     function executeAdjustment() external {
-        uint256 commonPoolBalance = commonPoolVault.balance(commonPoolToken);
+        uint256 commonPoolBalance = commonPoolFundsManager.balance(commonPoolToken);
         uint256 tokenTotalSupply = commonPoolToken.totalSupply();
         uint256 targetBalance = tokenTotalSupply.mul(targetRatio).div(RATIO_PRECISION);
 
@@ -99,7 +109,7 @@ contract Issuance is AragonApp {
                 totalToBurn = commonPoolBalance.sub(targetBalance);
             }
 
-            commonPoolTokenManager.burn(commonPoolVault, totalToBurn);
+            commonPoolTokenManager.burn(commonPoolFundsManager.fundsOwner(), totalToBurn);
 
             emit AdjustmentMade(totalToBurn, false);
 
@@ -111,7 +121,7 @@ contract Issuance is AragonApp {
                 totalToMint = targetBalance.sub(commonPoolBalance);
             }
 
-            commonPoolTokenManager.mint(commonPoolVault, totalToMint);
+            commonPoolTokenManager.mint(commonPoolFundsManager.fundsOwner(), totalToMint);
 
             emit AdjustmentMade(totalToMint, true);
         }

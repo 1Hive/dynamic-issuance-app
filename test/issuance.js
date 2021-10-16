@@ -1,17 +1,19 @@
 const { newDao, newApp } = require('./helpers/dao')
 const { setOpenPermission } = require('./helpers/permissions')
+const { assertRevert } = require("./helpers/assertThrow");
 const { ZERO_ADDRESS, bn, bigExp, ONE_DAY } = require('@aragon/contract-helpers-test')
-const { assertBn, assertRevert } = require('@aragon/contract-helpers-test/src/asserts')
+const { assertBn } = require('@aragon/contract-helpers-test/src/asserts')
 
 const Issuance = artifacts.require('MockIssuance.sol')
 const TokenManager = artifacts.require('HookedTokenManager.sol')
 const Vault = artifacts.require('Vault.sol')
 const MiniMeToken = artifacts.require('MiniMeToken.sol')
+const AragonVaultFundsManager = artifacts.require('AragonVaultFundsManager.sol')
 
-contract('Issuance', ([appManager]) => {
+contract('Issuance', ([appManager, newFundsManager]) => {
 
   let dao, acl
-  let tokenManagerBase, tokenManager, vaultBase, vault, issuanceBase, issuance, commonPoolToken
+  let tokenManagerBase, tokenManager, vaultBase, vault, issuanceBase, issuance, commonPoolToken, aragonVaultFundsManager
 
   const ANY_ADDRESS = '0xffffffffffffffffffffffffffffffffffffffff'
   const EXTRA_PRECISION = bigExp(1,18);
@@ -47,7 +49,7 @@ contract('Issuance', ([appManager]) => {
     return (await issuance.getTimestampPublic()).sub(await issuance.previousAdjustmentSecond())
   }
 
-  before(async () => {
+  before('deploy bases', async () => {
     tokenManagerBase = await TokenManager.new()
     vaultBase = await Vault.new()
     issuanceBase = await Issuance.new()
@@ -73,6 +75,7 @@ contract('Issuance', ([appManager]) => {
     const vaultAddress = await newApp(dao, 'vault', vaultBase.address, appManager)
     vault = await Vault.at(vaultAddress)
     await vault.initialize()
+    aragonVaultFundsManager = await AragonVaultFundsManager.new(vault.address)
   })
 
   context('initialize()', () => {
@@ -81,13 +84,14 @@ contract('Issuance', ([appManager]) => {
 
     beforeEach(async () => {
       secondDeployed = await issuance.getTimestampPublic()
-      await issuance.initialize(tokenManager.address, vault.address,
+      await issuance.initialize(tokenManager.address, aragonVaultFundsManager.address,
         INITIAL_TARGET_RATIO, INITIAL_MAX_ADJUSTMENT_PER_SECOND)
+      await aragonVaultFundsManager.addFundsUser(issuance.address)
     })
 
     it('should set init params correctly', async () => {
       assert.equal(await issuance.commonPoolTokenManager(), tokenManager.address, 'Incorrect token manager')
-      assert.equal(await issuance.commonPoolVault(), vault.address, 'Incorrect vault')
+      assert.equal(await issuance.commonPoolFundsManager(), aragonVaultFundsManager.address, 'Incorrect funds manager')
       assert.equal(await issuance.commonPoolToken(), commonPoolToken.address, 'Incorrect token')
       assertBn(await issuance.targetRatio(), INITIAL_TARGET_RATIO, 'Incorrect target ratio')
       assertBn(await issuance.maxAdjustmentRatioPerSecond(), INITIAL_MAX_ADJUSTMENT_PER_SECOND, 'Incorrect max adjustment per second')
@@ -99,6 +103,18 @@ contract('Issuance', ([appManager]) => {
       issuance = await Issuance.at(issuanceAddress)
       await assertRevert(issuance.initialize(tokenManager.address, vault.address,
         RATIO_PRECISION.add(bn(1)), INITIAL_MAX_ADJUSTMENT_PER_SECOND), 'ISSUANCE_TARGET_RATIO_TOO_HIGH')
+    })
+
+    context('updateFundsManager(fundsManager)', () => {
+      it('updates the funds manager', async () => {
+        await issuance.updateFundsManager(newFundsManager)
+        assert.equal(await issuance.commonPoolFundsManager(), newFundsManager, 'Incorrect funds manager')
+      })
+
+      it('reverts when no permission', async () => {
+        await acl.revokePermission(ANY_ADDRESS, issuance.address, await issuance.UPDATE_SETTINGS_ROLE())
+        await assertRevert(issuance.updateFundsManager(newFundsManager), 'APP_AUTH_FAILED')
+      })
     })
 
     context('updateTargetRatio(uint256 _targetRatio)', async () => {
