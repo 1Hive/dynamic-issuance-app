@@ -31,7 +31,7 @@ contract Issuance is AragonApp {
     /**
     * @notice Initialise the Issuance app
     * @param _commonPoolTokenManager Token Manager managing the common pool token
-    * @param _commonPoolFundsManager Vault holding the common pools token balance
+    * @param _commonPoolFundsManager Funds manager managing common pools token balance
     * @param _targetRatio Fractional ratio value multiplied by RATIO_PRECISION, eg target ratio of 0.2 would be 2e9
     * @param _maxAdjustmentRatioPerSecond Eg A max adjustment ratio of 0.1 would be 0.1 / 31536000 (seconds in year) = 0.000000003170979198
         adjusted by multiplying by EXTRA_PRECISION = 3170979198
