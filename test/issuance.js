@@ -1,7 +1,8 @@
 const { newDao, newApp } = require('./helpers/dao')
 const { setOpenPermission } = require('./helpers/permissions')
+const { assertRevert } = require("./helpers/assertThrow");
 const { ZERO_ADDRESS, bn, bigExp, ONE_DAY } = require('@aragon/contract-helpers-test')
-const { assertBn, assertRevert } = require('@aragon/contract-helpers-test/src/asserts')
+const { assertBn } = require('@aragon/contract-helpers-test/src/asserts')
 
 const Issuance = artifacts.require('MockIssuance.sol')
 const TokenManager = artifacts.require('HookedTokenManager.sol')
@@ -48,7 +49,7 @@ contract('Issuance', ([appManager, newFundsManager]) => {
     return (await issuance.getTimestampPublic()).sub(await issuance.previousAdjustmentSecond())
   }
 
-  before(async () => {
+  before('deploy bases', async () => {
     tokenManagerBase = await TokenManager.new()
     vaultBase = await Vault.new()
     issuanceBase = await Issuance.new()
