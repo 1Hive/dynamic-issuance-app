@@ -1,4 +1,4 @@
-# Dynamic Issuance Aragon App
+# Dynamic Issuance Aragon App  <a href="https://1hive.org/"><img align="right" src=".github/assets/1hive.svg" height="80px" /></a>
 
 The Dynamic Issuance App implements a Dynamic Supply Policy that can burn and issue tokens automatically. The tokens are usually held on the organization Common Pool (an address controled by the DAO, most likely an Aragon Vault or Agent app)
 
