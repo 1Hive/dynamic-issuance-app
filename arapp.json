@@ -47,5 +47,5 @@
       "network": "polygon"
     }
   },
-  "path": "contracts/Issuance.sol"
+  "path": "contracts/DynamicIssuance.sol"
 }

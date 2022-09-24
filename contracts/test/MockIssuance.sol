@@ -1,7 +1,7 @@
 pragma solidity ^0.4.0;
 
-import "@aragon/contract-helpers-test/contracts/0.4/aragonOS/TimeHelpersMock.sol";
-import "../Issuance.sol";
+import "@1hive/contract-helpers-test/contracts/0.4/aragonOS/TimeHelpersMock.sol";
+import "../DynamicIssuance.sol";
 
-contract MockIssuance is Issuance, TimeHelpersMock {
+contract MockIssuance is DynamicIssuance, TimeHelpersMock {
 }

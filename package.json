@@ -1,6 +1,6 @@
 {
   "name": "@1hive/apps-issuance",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "dynamic issuance app",
   "scripts": {
     "console": "hardhat console",
@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@1hive/hardhat-aragon": "^0.0.3",
-    "@aragon/contract-helpers-test": "^0.1.0",
+    "@1hive/contract-helpers-test": "^0.1.0",
     "@nomiclabs/hardhat-ethers": "^2.0.2",
     "@nomiclabs/hardhat-truffle5": "^2.0.2",
     "@nomiclabs/hardhat-web3": "^2.0.0",
